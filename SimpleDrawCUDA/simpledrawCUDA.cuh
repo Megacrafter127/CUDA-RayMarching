@@ -9,7 +9,7 @@
 #define SIMPLEDRAWCUDA_H_
 
 extern "C" {
-#include "simpledraw.h"
+#include <simpledraw.h>
 }
 
 typedef struct {

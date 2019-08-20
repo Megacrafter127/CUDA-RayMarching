@@ -45,7 +45,17 @@ typedef int (*drawFunc)(SDL_Surface *surface, size_t frame, void *data),
  * @param data		user supplied data
  * @return			0 on success, non-0 if an error occurs or no more frames should be rendered
  */
-		(*eventFunc)(SDL_Event *event, void *data);
+		(*eventFunc)(SDL_Event *event, void *data),
+/**
+ * A function to draw an individual pixel
+ * @param pixel		pointer to the data of the pixel to be drawn on the SDL_Surface
+ * @param fmt		SDL_PixelFormat of the SDL_Surface
+ * @param x			the X coordinate of the pixel
+ * @param y			the Y coordinate of the pixel
+ * @param frame		the frame counter
+ * @param data		user supplied data
+ */
+		(*pixelFunc)(void *pixel, const SDL_PixelFormat *fmt, unsigned x, unsigned y, size_t frame, void *data);
 
 /**
  * The default event processing function.
@@ -67,5 +77,16 @@ int defaultEventFunction(SDL_Event *event, void* data);
  * @return					the first non-0 return of either drawFunction or eventFunction
  */
 int autoDraw(SDL_Surface *surface, drawFunc drawFunction, float deltaT, eventFunc eventFunction, void *data);
+
+/**
+ * Automatic pixelwise drawing loop.
+ * @param surface			the SDL_Surface to draw on
+ * @param pixelFunction		the pixelFunc used to draw each pixel
+ * @param deltaT			the minimum amount of time between frames in seconds
+ * @param eventFunction		the eventFunc used to process events generated during the loop
+ * @param data				user supplied data to be passed to drawFunction or eventFunction
+ * @return					the first non-0 return of either pixelFunction or eventFunction
+ */
+int autoDrawPixels(SDL_Surface *surface,pixelFunc pixelFunction,float deltaT,eventFunc eventFunction,void *data);
 
 #endif /* SIMPLEDRAW_H_ */

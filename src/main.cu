@@ -5,7 +5,7 @@
  *      Author: Megacrafter127
  */
 
-#include "raymarching.cuh"
+#include <raymarching.cuh>
 
 #include <cmath>
 #include <ctime>

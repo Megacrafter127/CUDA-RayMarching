@@ -66,3 +66,24 @@ int autoDraw(SDL_Surface *surface, drawFunc drawFunction, float deltaT, eventFun
 	}
 	return c;
 }
+
+typedef struct {
+	pixelFunc func;
+	void *data;
+} pixelFuncContainer;
+
+static int drawPixelsFunc(SDL_Surface *surface, size_t frame, void *data) {
+	pixelFuncContainer *pfc=data;
+	for(size_t y=0;y<surface->h;y++) for(size_t x=0;x<surface->w;x++) {
+		int r=pfc->func(surface->pixels+y*surface->pitch+x*surface->format->BytesPerPixel,
+				surface->format, x, y, frame, pfc->data);
+		if(r) return r;
+	}
+	return 0;
+}
+
+int autoDrawPixels(SDL_Surface *surface,pixelFunc pixelFunction,float deltaT,eventFunc eventFunction,void *data) {
+	pixelFuncContainer pfc={func:pixelFunction,data:data};
+	return autoDraw(surface,drawPixelsFunc,deltaT,eventFunction,&pfc);
+}
+

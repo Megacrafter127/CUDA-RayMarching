@@ -8,7 +8,7 @@
 #ifndef RAYMARCHING_CUH_
 #define RAYMARCHING_CUH_
 
-#include "simpledrawCUDA.cuh"
+#include <simpledrawCUDA.cuh>
 
 __host__ __device__ inline float3 operator*(float a, float3 b) {
 	return make_float3(a*b.x,a*b.y,a*b.z);
