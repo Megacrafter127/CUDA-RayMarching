@@ -1,10 +1,10 @@
 OBJS := raymarching.o
 HDRS := raymarching.cuh
-CFLAGS = -Wall -fPIC
+CFLAGS += -Wall -fPIC
 
 include ../nvcc.mk
 
-CUFLAGS = -O3 --relocatable-device-code=true
+CUFLAGS += -O3 --relocatable-device-code=true -I../SimpleDrawCUDA -I../SimpleDraw
 
 
 libRayMarching.a: $(OBJS)

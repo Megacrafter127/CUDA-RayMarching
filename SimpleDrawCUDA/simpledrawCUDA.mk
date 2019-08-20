@@ -1,10 +1,10 @@
 OBJS := simpledrawCUDA.o
 HDRS := simpledrawCUDA.cuh
-CFLAGS = -Wall -fPIC
+CFLAGS += -Wall -fPIC
 
 include ../nvcc.mk
 
-CUFLAGS = -O3 --relocatable-device-code=true
+CUFLAGS += -O3 --relocatable-device-code=true -I../SimpleDraw
 
 
 libSimpleDrawCUDA.a: $(OBJS)
