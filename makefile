@@ -23,11 +23,11 @@ include nvcc.mk
 OBJS := main.o
 CFLAGS += -Wall -fPIC
 CUFLAGS += -O3 --cudart static --relocatable-device-code=true
-LDLIBS += $(SUBPROJECTS:%=-l%)
+LDLIBS += $(SUBPROJECTS:%=-l%) -lSDL2
 
 StaticRayMarchingTest: CUFLAGS += $(SUBPROJECTS:%=-I%)
 StaticRayMarchingTest: LDFLAGS += $(SUBPROJECTS:%=-L%/)
-StaticRayMarchingTest: $(OBJS) SimpleDraw/libSimpleDraw.so SimpleDrawCUDA/libSimpleDrawCUDA.a RayMarching/libRayMarching.a
+StaticRayMarchingTest: $(OBJS) SimpleDraw/libSimpleDraw.a SimpleDrawCUDA/libSimpleDrawCUDA.a RayMarching/libRayMarching.a
 	$(NVCC) $(CUFLAGS) $(LDFLAGS) -link -o $@ $(OBJS) -Xlinker -Bstatic $(LDLIBS) -Xlinker -Bdynamic
 RayMarchingTest: LDFLAGS += -L/usr/local/lib
 RayMarchingTest: $(OBJS) $(LDLIBS)

@@ -44,20 +44,16 @@ typedef struct : simpleColor_t {
 
 __constant__ static sphereData_t shapeData[SHAPE_COUNT];
 
-__host__ __device__ inline float3 operator-(float3 a, float3 b) {
-	return make_float3(a.x-b.x,a.y-b.y,a.z-b.z);
-}
-
-__device__ float sphereDistance(const void *shapeData, float3 point, size_t frame) {
+__device__ static float sphereDistance(const void *shapeData, vectorType point, size_t frame) {
 	register const sphereData_t * const sphere=static_cast<const sphereData_t*>(shapeData);
-	register float3 diff=point-sphere->center;
-	return norm3df(diff.x,diff.y,diff.z)-sphere->radius;
+	register vectorType diff=point+-1*sphere->center;
+	return norm(diff)-sphere->radius;
 }
 __managed__ distanceFunc sphereDistAddr=sphereDistance;
 
-__device__ float cubeDistance(const void *shapeData, float3 point, size_t frame) {
+__device__ static float cubeDistance(const void *shapeData, float3 point, size_t frame) {
 	register const sphereData_t * const sphere=static_cast<const sphereData_t*>(shapeData);
-	register float3 diff=point-sphere->center;
+	register vectorType diff=point+-1*sphere->center;
 	diff.x=fabs(diff.x);
 	diff.y=fabs(diff.y);
 	diff.z=fabs(diff.z);
@@ -69,7 +65,7 @@ __managed__ distanceFunc cubeDistAddr=cubeDistance;
 
 __device__ static floatColor_t glowColor(const void *shapeData, float3 point, float distance, float divergence, size_t frame, size_t steps) {
 	register floatColor_t color=static_cast<const simpleColor_t*>(shapeData)->color;
-	const register float stepf=1-1/(steps*.0625f+1),divf=1-distance/divergence;
+	const register scalarType stepf=1-1/(steps*.0625f+1),divf=1-distance/divergence;
 	color.r*=divf*stepf;
 	color.g*=divf*stepf;
 	color.b*=divf*stepf;
@@ -83,28 +79,46 @@ int handleError(cudaError_t err) {
 	return 1;
 }
 
-inline float3 operator/(float3 a, float b) {
+inline vectorType operator/(vectorType a, float b) {
 	return make_float3(a.x/b,a.y/b,a.z/b);
 }
 
-inline float3 operator-(float3 a) {
+inline vectorType operator-(vectorType a) {
 	return make_float3(-a.x,-a.y,-a.z);
 }
 
+typedef struct {
+	vectorType face,dx,dy;
+} camplane_t;
+
+__constant__ camplane_t camplane;
+static const vectorType ldy=make_float3(0,-1.0f/(IMG_MAX-1),0);
+
+__device__ vectorType raydir(scalarType &divergence, uint3 pos, size_t frame) {
+	const register vectorType ret=camplane.face+pos.x*camplane.dx+pos.y*camplane.dy;
+	divergence=norm(camplane.dx)+norm(camplane.dy)/norm(ret);
+	return ret;
+}
+__managed__ rayFunc rf=raydir;
+
 static int postFrame(size_t frame, void *data) {
 	const clock_t t=clock();
-	const register float dn=-1.0f/(IMG_MAX-1),df=.25f,drad=.2f/CLOCKS_PER_SEC;
-	const register float s=sinf(t*drad),c=cosf(t*drad);
-	world.camera.dx=make_float3(s*dn,0,-c*dn);
+	const register scalarType dn=-1.0f/(IMG_MAX-1),df=.25f,drad=.2f/CLOCKS_PER_SEC;
+	const register scalarType s=sinf(t*drad),c=cosf(t*drad);
+	camplane_t cam;
+	cudaMemcpyFromSymbol(&cam,camplane,sizeof(camplane_t));
+	cam.dx=make_float3(s*dn,0,-c*dn);
 	world.camera.pos=make_float3(-c*df,0,-s*df);
-	world.camera.face=-world.camera.pos-world.camera.dx*IMG_WIDTH/2-world.camera.dy*IMG_HEIGHT/2;
+	cam.face=-1*world.camera.pos+cam.dx*-IMG_WIDTH/2+cam.dy*-IMG_HEIGHT/2;
+	cudaMemcpyToSymbol(camplane,&cam,sizeof(camplane_t));
 	return 0;
 }
 
 const static float xs[SHAPE_COUNT]={ 10, 10,  0,-10,-10,-10,  0, 10};
 
 int main() {
-	world.camera.dy=make_float3(0,-1.0f/(IMG_MAX-1),0);
+	cudaMemcpyToSymbol(camplane,&ldy,sizeof(vectorType),offsetof(camplane_t,dy));
+	world.camera.rays=rf;
 	postFrame(0,NULL);
 	cudaGetSymbolAddress((void**)&(world.shapes),shapes);
 	world.shapeCount=SHAPE_COUNT;

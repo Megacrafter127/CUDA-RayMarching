@@ -10,23 +10,31 @@
 
 #include <simpledrawCUDA.cuh>
 
-__host__ __device__ inline float3 operator*(float a, float3 b) {
-	return make_float3(a*b.x,a*b.y,a*b.z);
-}
+typedef float3 vectorType;
+typedef float scalarType;
 
-__host__ __device__ inline float3 operator*(float3 a, float b) {
+__host__ __device__ constexpr vectorType operator*(vectorType a, scalarType b) {
+	a.x*=b;
+	a.y*=b;
+	a.z*=b;
+	return a;
+}
+__host__ __device__ constexpr vectorType operator*(scalarType a, vectorType b) {
 	return b*a;
 }
 
-__host__ __device__ inline float3 operator+(float3 a, float3 b) {
-	return make_float3(a.x+b.x,a.y+b.y,a.z+b.z);
+__host__ __device__ constexpr vectorType operator+(vectorType a, vectorType b) {
+	a.x+=b.x;
+	a.y+=b.y;
+	a.z+=b.z;
+	return a;
 }
 
-__host__ __device__ inline float maxf(float a, float b) {
+__host__ __device__ constexpr scalarType maxf(scalarType a, scalarType b) {
 	return a>b?a:b;
 }
 
-__device__ __host__ inline float normf3(float3 vector) {
+__device__ __host__ inline scalarType norm(vectorType vector) {
 	return norm3df(vector.x,vector.y,vector.z);
 }
 
@@ -37,7 +45,7 @@ __device__ __host__ inline float normf3(float3 vector) {
  * @param frame			The framecounter
  * @return				The minimum distance between point and this shape.
  */
-typedef float (*distanceFunc)(const void *shapeData, float3 point, size_t frame);
+typedef scalarType (*distanceFunc)(const void *shapeData, vectorType point, size_t frame);
 
 /**
  * Representation of color with floating point values.
@@ -85,12 +93,12 @@ typedef struct __floatColor {
  * @param shapeData		The data associated with this shape.
  * @param point			The point the ray is currently at, in case this shape has different colors depending on where it's viewed from.
  * @param distance		The distance between this shape and the point, as calculated by the distance function of this shape.
- * @param divergence	The average distance between this ray and its neighbors at this point.
+ * @param rayLength		The distance this ray has already traveled.
  * @param frame			The framecounter
  * @param steps			The number of steps this ray has already marched
  * @return				The color of this shape
  */
-typedef floatColor_t (*colorFunc)(const void *shapeData, float3 point, float distance, float divergence, size_t frame, size_t steps);
+typedef floatColor_t (*colorFunc)(const void *shapeData, vectorType point, scalarType distance, scalarType rayLength, size_t frame, size_t steps);
 
 /**
  * Data structure representing a shape
@@ -115,35 +123,37 @@ typedef struct {
 	 * @param frame		the framecounter
 	 * @return			the distance
 	 */
-	__device__ inline float getDistance(float3 point, size_t frame) const {
+	__device__ inline scalarType getDistance(vectorType point, size_t frame) const {
 		return this->distanceFunction(this->shapeData,point,frame);
 	}
 	/**
 	 * Mnemonic to call the color function with parameters.
 	 * @param point			the point
 	 * @param distance		the distance
-	 * @param divergence	the average distance between this ray and its neighbor rays at this point
+	 * @param rayLength		the length the ray has already traveled
 	 * @param frame			the framecounter
 	 * @param steps			the number of steps this ray has already marched
 	 * @return				the color
 	 */
-	__device__ inline floatColor_t getColor(float3 point, float distance, float divergence,size_t frame,size_t steps) const {
-		return this->colorFunction(this->shapeData,point,distance,divergence,frame,steps);
+	__device__ inline floatColor_t getColor(vectorType point, scalarType distance, scalarType rayLength,size_t frame,size_t steps) const {
+		return this->colorFunction(this->shapeData,point,distance,rayLength,frame,steps);
 	}
 } shape_t;
+
+/**
+ * Calculates the direction of the ray representing the given pixel
+ * @param pixel				the coordinates of the pixel. z is usually ignored
+ * @param divergenceFactor	the average increase in distance between this beam and its neighbors when the beam travels 1 unit of length.
+ * @return					the direction of the ray originating from the camera's position
+ */
+typedef vectorType (*rayFunc)(scalarType &divergenceFactor, uint3 pixel, size_t frame);
 
 /**
  * camera data
  */
 typedef struct {
-	/**
-	 * Camera position and direction of the top-left most ray.
-	 */
-	float3 pos,face;
-	/**
-	 * Difference between a ray and its right/bottom neighbors
-	 */
-	float3 dx,dy;
+	vectorType pos;
+	rayFunc rays;
 } camera_t;
 
 /**

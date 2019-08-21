@@ -16,16 +16,9 @@ __device__ static void marchRay(argb &pixel, uint3 pos, size_t frame, const void
 		memcpy(&world,data,sizeof(world_t));
 	}
 	__syncthreads();
-	register float3 start=world.camera.pos,ray=world.camera.face+pos.x*world.camera.dx+pos.y*world.camera.dy;
-	register float rayLen=normf3(ray),totalDist=0,divergence=(normf3(world.camera.dx)+normf3(world.camera.dy))*.5f/rayLen;
-	/*if(pos.x==0 && pos.y==0) {
-		printff3("Start",start);
-		printff3("Face",world->camera.face);
-		printff3("Dx",world->camera.dx);
-		printff3("Dy",world->camera.dy);
-		printff3("Ray",ray);
-		printf("\n");
-	}*/
+	register scalarType totalDist=0,divergence;
+	register vectorType start=world.camera.pos,ray=world.camera.rays(divergence,pos,frame);
+	register scalarType rayLen=norm(ray);
 	register floatColor_t color;
 	color.r=0;
 	color.g=0;
@@ -34,10 +27,10 @@ __device__ static void marchRay(argb &pixel, uint3 pos, size_t frame, const void
 	register floatColor_t black=color;
 	register size_t step=0;
 	do{
-		float minDist=INFINITY;
+		scalarType minDist=INFINITY;
 		size_t minShape=-1;
 		for(size_t i=0;i<world.shapeCount;i++) {
-			float dist=world.shapes[i].getDistance(start,frame);
+			scalarType dist=world.shapes[i].getDistance(start,frame);
 			if(dist<minDist) {
 				minDist=dist;
 				minShape=i;
@@ -45,9 +38,8 @@ __device__ static void marchRay(argb &pixel, uint3 pos, size_t frame, const void
 		}
 		if(minShape==-1) break;
 		if(minDist>maxf(totalDist,100)) break;
-		const register float cdiv=totalDist*divergence;
+		const register scalarType cdiv=totalDist*divergence;
 		if(cdiv>minDist) {
-			//printf("Hit\n");
 			floatColor_t shapeColor=world.shapes[minShape].getColor(start,minDist,cdiv,frame,step);
 			if(minDist>0) shapeColor.a*=1-minDist/cdiv;
 			if(shapeColor.a<0) shapeColor.a=0;
