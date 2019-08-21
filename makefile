@@ -52,6 +52,6 @@ cleanSimpleDrawCUDA:
 cleanRayMarching:
 	-$(MAKE) -C RayMarching clean
 clean:
-	-$(RM) RayMarchingTest RayMarchingTestStatic $(OBJS)
+	-$(RM) RayMarchingTest StaticRayMarchingTest $(OBJS)
 cleanall: clean $(SUBPROJECTS:%=clean%)
 .PHONY: all $(SUBPROJECTS:%=clean%) clean cleanall install $(SUBPROJECTS:%=uninstall%) uninstall uninstallall
