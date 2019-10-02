@@ -79,12 +79,18 @@ int handleError(cudaError_t err) {
 	return 1;
 }
 
-inline vectorType operator/(vectorType a, float b) {
-	return make_float3(a.x/b,a.y/b,a.z/b);
+__host__ __device__ constexpr vectorType operator/(vectorType a, float b) {
+	a.x/=b;
+	a.y/=b;
+	a.z/=b;
+	return a;
 }
 
-inline vectorType operator-(vectorType a) {
-	return make_float3(-a.x,-a.y,-a.z);
+__host__ __device__ constexpr vectorType operator-(vectorType a) {
+	a.x=-a.x;
+	a.y=-a.y;
+	a.z=-a.z;
+	return a;
 }
 
 typedef struct {
@@ -95,8 +101,16 @@ __constant__ camplane_t camplane;
 static const vectorType ldy=make_float3(0,-1.0f/(IMG_MAX-1),0);
 
 __device__ vectorType raydir(scalarType &divergence, uint3 pos, size_t frame) {
-	const register vectorType ret=camplane.face+pos.x*camplane.dx+pos.y*camplane.dy;
-	divergence=norm(camplane.dx)+norm(camplane.dy)/norm(ret);
+	register vectorType ret=camplane.face+pos.x*camplane.dx+pos.y*camplane.dy;
+	vectorType delta[4]={ret+camplane.dx,ret+-camplane.dx,ret+camplane.dy,ret+-camplane.dy};
+	ret=ret/norm(ret);
+	divergence=INFINITY;
+	for(int i=0;i<4;i++) {
+		delta[i]=-delta[i]/norm(delta[i]);
+		register scalarType ldiv=norm(ret+delta[i]);
+		if(ldiv<divergence) divergence=ldiv;
+	}
+	divergence=(norm(camplane.dx)+norm(camplane.dy))/norm(ret);
 	return ret;
 }
 __managed__ rayFunc rf=raydir;
@@ -122,6 +136,7 @@ int main() {
 	postFrame(0,NULL);
 	cudaGetSymbolAddress((void**)&(world.shapes),shapes);
 	world.shapeCount=SHAPE_COUNT;
+	world.maxErr=0.0625f;
 
 	sphereData_t *sd;
 	cudaGetSymbolAddress((void**)&sd,shapeData);

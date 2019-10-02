@@ -12,7 +12,7 @@
 
 __device__ static void marchRay(argb &pixel, uint3 pos, size_t frame, const void *data) {
 	__shared__ world_t world;
-	if(threadIdx.x|threadIdx.y==0) {
+	if(threadIdx.x|threadIdx.y|threadIdx.z==0) {
 		memcpy(&world,data,sizeof(world_t));
 	}
 	__syncthreads();
@@ -24,20 +24,21 @@ __device__ static void marchRay(argb &pixel, uint3 pos, size_t frame, const void
 	color.g=0;
 	color.b=0;
 	color.a=1.0f/0xFF;
-	register floatColor_t black=color;
 	register size_t step=0;
-	do{
-		scalarType minDist=INFINITY;
-		size_t minShape=-1;
-		for(size_t i=0;i<world.shapeCount;i++) {
-			scalarType dist=world.shapes[i].getDistance(start,frame);
+	for(;totalDist*SCL_EPSILON < world.maxErr;step++) {
+		register scalarType minDist=INFINITY;
+		register size_t minShape=world.shapeCount;
+		for(register size_t i=0;i<world.shapeCount;i++) {
+			register scalarType dist=world.shapes[i].getDistance(start,frame);
+			//if(dbg) printf("Step:    %lld\nShape:   %3lld %f\nClosest: %3zd %f\n\n",step,i,dist,minShape,minDist);
 			if(dist<minDist) {
 				minDist=dist;
 				minShape=i;
 			}
 		}
-		if(minShape==-1) break;
-		if(minDist>maxf(totalDist,100)) break;
+		if(minShape==world.shapeCount) break;
+		assert(minShape<world.shapeCount);
+		//if(minDist>maxf(totalDist,100)) break;
 		const register scalarType cdiv=totalDist*divergence;
 		if(cdiv>minDist) {
 			floatColor_t shapeColor=world.shapes[minShape].getColor(start,minDist,cdiv,frame,step);
@@ -45,14 +46,16 @@ __device__ static void marchRay(argb &pixel, uint3 pos, size_t frame, const void
 			if(shapeColor.a<0) shapeColor.a=0;
 			if(shapeColor.a>1) shapeColor.a=1;
 			color+=shapeColor;
+			if(color.a*0xFF>=0xFE) break;
 		}
 		if(minDist<=0) break;
 		totalDist+=minDist;
 		start=start+ray*(minDist/rayLen);
-		step++;
-	} while(color.a*0xFF<=0xFE);
-	black.a=1-color.a;
-	color+=black;
+	}
+	color.r*=color.a;
+	color.g*=color.a;
+	color.b*=color.a;
+	color.a=1;
 	pixel=(argb)color;
 }
 __managed__ static cudaFunc rayMarch=marchRay;

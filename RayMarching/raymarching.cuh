@@ -8,34 +8,12 @@
 #ifndef RAYMARCHING_CUH_
 #define RAYMARCHING_CUH_
 
+#include "vecops.cuh"
+
 #include <simpledrawCUDA.cuh>
-
-typedef float3 vectorType;
-typedef float scalarType;
-
-__host__ __device__ constexpr vectorType operator*(vectorType a, scalarType b) {
-	a.x*=b;
-	a.y*=b;
-	a.z*=b;
-	return a;
-}
-__host__ __device__ constexpr vectorType operator*(scalarType a, vectorType b) {
-	return b*a;
-}
-
-__host__ __device__ constexpr vectorType operator+(vectorType a, vectorType b) {
-	a.x+=b.x;
-	a.y+=b.y;
-	a.z+=b.z;
-	return a;
-}
 
 __host__ __device__ constexpr scalarType maxf(scalarType a, scalarType b) {
 	return a>b?a:b;
-}
-
-__device__ __host__ inline scalarType norm(vectorType vector) {
-	return norm3df(vector.x,vector.y,vector.z);
 }
 
 /**
@@ -173,6 +151,10 @@ typedef struct {
 	 * number of shapes
 	 */
 	size_t shapeCount;
+	/**
+	 * maximum permissible error
+	 */
+	scalarType maxErr;
 } world_t;
 
 /**
