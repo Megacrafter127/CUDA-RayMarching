@@ -12,7 +12,10 @@
 
 #include <simpledrawCUDA.cuh>
 
-__host__ __device__ constexpr scalarType maxf(scalarType a, scalarType b) {
+template<typename T> __host__ __device__ constexpr T &max(T &a, T &b) {
+	return a>b?a:b;
+}
+template<typename T> __host__ __device__ constexpr const T &max(const T &a, const T &b) {
 	return a>b?a:b;
 }
 
@@ -120,11 +123,12 @@ typedef struct {
 
 /**
  * Calculates the direction of the ray representing the given pixel
- * @param pixel				the coordinates of the pixel. z is usually ignored
+ * @param pixel				the coordinates of the pixel, with (0,0) being the center of the image. z is usually ignored.
  * @param divergenceFactor	the average increase in distance between this beam and its neighbors when the beam travels 1 unit of length.
+ * @param frame				the frame to render.
  * @return					the direction of the ray originating from the camera's position
  */
-typedef vectorType (*rayFunc)(scalarType &divergenceFactor, uint3 pixel, size_t frame);
+typedef vectorType (*rayFunc)(scalarType &divergenceFactor, int3 pixel, size_t frame);
 
 /**
  * camera data

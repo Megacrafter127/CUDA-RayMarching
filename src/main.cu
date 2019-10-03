@@ -79,28 +79,33 @@ int handleError(cudaError_t err) {
 	return 1;
 }
 
-__host__ __device__ constexpr vectorType operator/(vectorType a, float b) {
-	a.x/=b;
-	a.y/=b;
-	a.z/=b;
-	return a;
-}
-
-__host__ __device__ constexpr vectorType operator-(vectorType a) {
-	a.x=-a.x;
-	a.y=-a.y;
-	a.z=-a.z;
-	return a;
-}
-
 typedef struct {
 	vectorType face,dx,dy;
 } camplane_t;
 
 __constant__ camplane_t camplane;
-static const vectorType ldy=make_float3(0,-1.0f/(IMG_MAX-1),0);
+static camplane_t cam;
+static float2 mouseMotion;
+static scalarType mouseSensitivity=.5f;
+static scalarType movementSpeed=1;
+static unsigned char keymask=0;
+#define KEY_FORWARD 0
+#define KEY_BACKWARD 1
+#define KEY_LEFT 2
+#define KEY_RIGHT 3
+#define KEY_UP 4
+#define KEY_DOWN 5
+#define MASK(bit) (1<<(bit))
+#define TEST(mask,bit) ((mask>>bit)&1)
+#define TESTAB(mask,p,n) (TEST(mask,p)-TEST(mask,n))
+static scalarType fov=-1.0f/(IMG_MAX-1);
+static scalarType fovSpeed=fov*.0625f;
+static const vectorType vecx=make_float3(1,0,0);
+static const vectorType vecy=make_float3(0,1,0);
+static const vectorType vecz=make_float3(0,0,1);
 
-__device__ vectorType raydir(scalarType &divergence, uint3 pos, size_t frame) {
+
+__device__ vectorType raydir(scalarType &divergence, int3 pos, size_t frame) {
 	register vectorType ret=camplane.face+pos.x*camplane.dx+pos.y*camplane.dy;
 	vectorType delta[4]={ret+camplane.dx,ret+-camplane.dx,ret+camplane.dy,ret+-camplane.dy};
 	ret=ret/norm(ret);
@@ -114,25 +119,85 @@ __device__ vectorType raydir(scalarType &divergence, uint3 pos, size_t frame) {
 	return ret;
 }
 __managed__ rayFunc rf=raydir;
-
+static clock_t last=clock();
 static int postFrame(size_t frame, void *data) {
 	const clock_t t=clock();
-	const register scalarType dn=-1.0f/(IMG_MAX-1),df=.25f,drad=.2f/CLOCKS_PER_SEC;
-	const register scalarType s=sinf(t*drad),c=cosf(t*drad);
-	camplane_t cam;
-	cudaMemcpyFromSymbol(&cam,camplane,sizeof(camplane_t));
-	cam.dx=make_float3(s*dn,0,-c*dn);
-	world.camera.pos=make_float3(-c*df,0,-s*df);
-	cam.face=-1*world.camera.pos+cam.dx*-IMG_WIDTH/2+cam.dy*-IMG_HEIGHT/2;
+	register vectorType delta;
+	delta+=normv(cam.face)*TESTAB(keymask,KEY_FORWARD,KEY_BACKWARD);
+	delta+=normv(cam.dx)*TESTAB(keymask,KEY_RIGHT,KEY_LEFT);
+	delta+=normv(cam.dy)*TESTAB(keymask,KEY_DOWN,KEY_UP);
+	world.camera.pos+=(movementSpeed*(t-last)/CLOCKS_PER_SEC)*delta;
+	const register scalarType cx=coss(mouseMotion.x),sx=sins(mouseMotion.x);
+	const register scalarType cy=coss(mouseMotion.y),sy=sins(mouseMotion.y);
+	cam.dx=fov*make_float3(cx,0,sx);
+	cam.dy=fov*make_float3(sx*sy,cy,-cx*sy);
+	cam.face=make_float3(-sx*cy,sy,cx*cy);
+
 	cudaMemcpyToSymbol(camplane,&cam,sizeof(camplane_t));
+	last=t;
 	return 0;
+}
+
+static int event(SDL_Event *event, void *data) {
+	int key=-1;
+	switch(event->type) {
+	case SDL_KEYDOWN:
+	case SDL_KEYUP:
+		switch(event->key.keysym.scancode) {
+		case SDL_SCANCODE_ESCAPE:
+			return 2;
+		case SDL_SCANCODE_W:
+			key=KEY_FORWARD;
+			break;
+		case SDL_SCANCODE_A:
+			key=KEY_LEFT;
+			break;
+		case SDL_SCANCODE_S:
+			key=KEY_BACKWARD;
+			break;
+		case SDL_SCANCODE_D:
+			key=KEY_RIGHT;
+			break;
+		case SDL_SCANCODE_SPACE:
+			key=KEY_UP;
+			break;
+		case SDL_SCANCODE_LSHIFT:
+			key=KEY_DOWN;
+			break;
+		}
+		if(key!=-1) {
+			key=MASK(key);
+			switch(event->key.state) {
+			case SDL_PRESSED:
+				keymask|=key;
+				break;
+			case SDL_RELEASED:
+				keymask&=~key;
+			}
+		}
+		break;
+	case SDL_MOUSEMOTION:
+		if(event->motion.state & SDL_BUTTON_RMASK) {
+			mouseMotion.x+=mouseSensitivity*fov*event->motion.xrel;
+			mouseMotion.y+=mouseSensitivity*fov*event->motion.yrel;
+		}
+		break;
+	case SDL_MOUSEWHEEL:
+		fov+=fovSpeed*(event->wheel.x+event->wheel.y);
+		break;
+	}
+	return defaultEventFunction(event,data);
 }
 
 const static float xs[SHAPE_COUNT]={ 10, 10,  0,-10,-10,-10,  0, 10};
 
 int main() {
-	cudaMemcpyToSymbol(camplane,&ldy,sizeof(vectorType),offsetof(camplane_t,dy));
+	cam.dy=fov*vecy;
+	cam.dx=fov*vecx;
+	cam.face=vecz;
+	cudaMemcpyToSymbol(camplane,&cam,sizeof(camplane_t));
 	world.camera.rays=rf;
+	world.camera.pos=-2*vecz;
 	postFrame(0,NULL);
 	cudaGetSymbolAddress((void**)&(world.shapes),shapes);
 	world.shapeCount=SHAPE_COUNT;
@@ -172,7 +237,7 @@ int main() {
 	}
 
 	surf=createSurface(IMG_WIDTH,IMG_HEIGHT,"Raymarching Test");
-	int ret=handleError(autoRenderShapes(surf,&world,0,postFrame));
+	int ret=handleError(autoRenderShapes(surf,&world,0,postFrame,NULL,event));
 	destroySurface(surf);
 	return ret;
 }

@@ -10,15 +10,16 @@
 #include <cmath>
 #include <cassert>
 
-__device__ static void marchRay(argb &pixel, uint3 pos, size_t frame, const void *data) {
+__device__ static void marchRay(argb &pixel, int3 pos, size_t frame, const void *data) {
 	__shared__ world_t world;
 	if(threadIdx.x|threadIdx.y|threadIdx.z==0) {
 		memcpy(&world,data,sizeof(world_t));
 	}
 	__syncthreads();
 	register scalarType totalDist=0,divergence;
-	register vectorType start=world.camera.pos,ray=world.camera.rays(divergence,pos,frame);
-	register scalarType rayLen=norm(ray);
+	register vectorType start=world.camera.pos;
+	const register vectorType ray=world.camera.rays(divergence,pos,frame);
+	const register scalarType rayLen=norm(ray);
 	register floatColor_t color;
 	color.r=0;
 	color.g=0;
@@ -29,8 +30,7 @@ __device__ static void marchRay(argb &pixel, uint3 pos, size_t frame, const void
 		register scalarType minDist=INFINITY;
 		register size_t minShape=world.shapeCount;
 		for(register size_t i=0;i<world.shapeCount;i++) {
-			register scalarType dist=world.shapes[i].getDistance(start,frame);
-			//if(dbg) printf("Step:    %lld\nShape:   %3lld %f\nClosest: %3zd %f\n\n",step,i,dist,minShape,minDist);
+			const register scalarType dist=world.shapes[i].getDistance(start,frame);
 			if(dist<minDist) {
 				minDist=dist;
 				minShape=i;
@@ -38,7 +38,7 @@ __device__ static void marchRay(argb &pixel, uint3 pos, size_t frame, const void
 		}
 		if(minShape==world.shapeCount) break;
 		assert(minShape<world.shapeCount);
-		//if(minDist>maxf(totalDist,100)) break;
+		//if(minDist>max(totalDist,100)) break;
 		const register scalarType cdiv=totalDist*divergence;
 		if(cdiv>minDist) {
 			floatColor_t shapeColor=world.shapes[minShape].getColor(start,minDist,cdiv,frame,step);
@@ -61,6 +61,6 @@ __device__ static void marchRay(argb &pixel, uint3 pos, size_t frame, const void
 __managed__ static cudaFunc rayMarch=marchRay;
 
 cudaError_t autoRenderShapes(SDL_Surface *surface, world_t *world, float deltaT, postFrameFunc postframe, preFrameFunc preframe, eventFunc eventFunction, unsigned x_threads, unsigned y_threads) {
-	cudaError_t err=autoDrawCUDA(surface,rayMarch,deltaT,postframe,preframe,eventFunction,world,x_threads,y_threads);
+	cudaError_t err=autoDrawCUDA(surface,rayMarch,1,deltaT,postframe,preframe,eventFunction,world,x_threads,y_threads);
 	return err;
 }

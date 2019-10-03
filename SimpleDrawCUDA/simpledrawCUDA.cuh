@@ -26,7 +26,7 @@ typedef struct {
  * @param frame		frame counter
  * @param data		user supplied data, unmodifiable to allow the use of constant device memory if needed
  */
-typedef void (*cudaFunc)(argb &pixel, uint3 pos, size_t frame, const void *data);
+typedef void (*cudaFunc)(argb &pixel, int3 pos, size_t frame, const void *data);
 
 /**
  * Host function to be called before the draw kernel launches.
@@ -71,6 +71,7 @@ int defaultPostFrame(size_t frame, void *data);
  * The drawKernel will run the supplied cudaFunc once for each pixel on the surface.
  * @param surface			The surface to draw on
  * @param func				The CUDA function to draw each pixel
+ * @param center			If set to 0, position will be passed as is to func. If set to 1, position will be centered such that (0,0) is in the center of the image.
  * @param deltaT			The minimum time between frames in seconds
  * @param postFrame			PostFrame function, called after the drawKernel for the frame finished, but before the framecounter is incremented
  * @param preframe			PreFrame function, called before the drawKernel for the frame is called, used to specify how much shared memory to dynamically allocate to the drawKernel.
@@ -78,6 +79,6 @@ int defaultPostFrame(size_t frame, void *data);
  * @param data				User supplied data. If the drawKernel is supposed to make use of it, it must be in device-accessible memory
  * @return					The cudaError that caused the loop to stop. If cudaSuccess the loop was cancelled due to preFrame or postFrame returning a non-0 value.
  */
-cudaError_t autoDrawCUDA(SDL_Surface *surface, cudaFunc func, float deltaT=.0f, postFrameFunc postFrame=NULL, preFrameFunc preframe=NULL, eventFunc eventFunction=NULL, void *data=NULL, unsigned x_threads=0, unsigned y_threads=0);
+cudaError_t autoDrawCUDA(SDL_Surface *surface, cudaFunc func, int center=0, float deltaT=.0f, postFrameFunc postFrame=NULL, preFrameFunc preframe=NULL, eventFunc eventFunction=NULL, void *data=NULL, unsigned x_threads=0, unsigned y_threads=0);
 
 #endif /* SIMPLEDRAWCUDA_H_ */
