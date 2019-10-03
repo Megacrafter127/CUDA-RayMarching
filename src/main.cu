@@ -99,7 +99,7 @@ static unsigned char keymask=0;
 #define TEST(mask,bit) ((mask>>bit)&1)
 #define TESTAB(mask,p,n) (TEST(mask,p)-TEST(mask,n))
 static scalarType fov=-1.0f/(IMG_MAX-1);
-static scalarType fovSpeed=fov*.0625f;
+static scalarType fovSpeed=fov*.09375f;
 static const vectorType vecx=make_float3(1,0,0);
 static const vectorType vecy=make_float3(0,1,0);
 static const vectorType vecz=make_float3(0,0,1);
@@ -128,7 +128,7 @@ static int postFrame(size_t frame, void *data) {
 	delta+=normv(cam.dy)*TESTAB(keymask,KEY_DOWN,KEY_UP);
 	world.camera.pos+=(movementSpeed*(t-last)/CLOCKS_PER_SEC)*delta;
 	const register scalarType cx=coss(mouseMotion.x),sx=sins(mouseMotion.x);
-	const register scalarType cy=coss(mouseMotion.y),sy=sins(mouseMotion.y);
+	const register scalarType cy=coss(mouseMotion.y),sy=sins(-mouseMotion.y);
 	cam.dx=fov*make_float3(cx,0,sx);
 	cam.dy=fov*make_float3(sx*sy,cy,-cx*sy);
 	cam.face=make_float3(-sx*cy,sy,cx*cy);
