@@ -10,6 +10,8 @@
 #include <cmath>
 #include <ctime>
 
+#include <SDL2/SDL_mouse.h>
+
 #define CHUNK_SIZE 16
 
 #define IMG_CHUNKS_WIDTH 50
@@ -177,10 +179,8 @@ static int event(SDL_Event *event, void *data) {
 		}
 		break;
 	case SDL_MOUSEMOTION:
-		if(event->motion.state & SDL_BUTTON_RMASK) {
-			mouseMotion.x+=mouseSensitivity*fov*event->motion.xrel;
-			mouseMotion.y+=mouseSensitivity*fov*event->motion.yrel;
-		}
+		mouseMotion.x-=mouseSensitivity*fov*event->motion.xrel;
+		mouseMotion.y-=mouseSensitivity*fov*event->motion.yrel;
 		break;
 	case SDL_MOUSEWHEEL:
 		fov+=fovSpeed*(event->wheel.x+event->wheel.y);
@@ -235,9 +235,14 @@ int main() {
 		sample.radius = i%2*3+i%3+1;
 		cudaMemcpyToSymbol(shapeData,&sample,sizeof(sphereData_t),sizeof(sphereData_t)*(i+1));
 	}
-
-	surf=createSurface(IMG_WIDTH,IMG_HEIGHT,"Raymarching Test");
-	int ret=handleError(autoRenderShapes(surf,&world,0,postFrame,NULL,event));
+	surf=createFullscreenSurface("Raymarching Test",true,true);
+	SDL_DisplayMode dm;
+	float delay=0;
+	if(SDL_GetCurrentDisplayMode(0,&dm)==0) {
+		delay=1.0f/dm.refresh_rate;
+	}
+	SDL_SetRelativeMouseMode(SDL_TRUE);
+	int ret=handleError(autoRenderShapes(surf,&world,delay,postFrame,NULL,event));
 	destroySurface(surf);
 	return ret;
 }

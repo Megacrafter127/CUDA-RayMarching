@@ -18,6 +18,8 @@
  */
 SDL_Surface *createSurface(unsigned width, unsigned height, const char *title);
 
+SDL_Surface *createFullscreenSurface(const char *title, int grabInput, int real);
+
 /**
  * Ensures that any changes made to the surface are reflected in the associated window.
  * @param surface	the surface created with createSurface
