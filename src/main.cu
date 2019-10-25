@@ -31,6 +31,15 @@ static SDL_Surface *surf;
 
 __managed__ static world_t world;
 
+const static clock_t start=clock();
+
+__constant__ static scalarType time_f=.0f;
+
+inline static void updateTime() {
+	scalarType t=static_cast<scalarType>(clock()-start)/CLOCKS_PER_SEC;
+	cudaMemcpyToSymbol(time_f,&t,sizeof(scalarType),cudaMemcpyHostToDevice);
+}
+
 #define SHAPE_COUNT 9
 
 __constant__ static shape_t shapes[SHAPE_COUNT];
@@ -51,9 +60,9 @@ __device__ static float sphereDistance(const void *shapeData, vectorType point, 
 	register vectorType diff=point+-1*sphere->center;
 	return norm(diff)-sphere->radius;
 }
-__managed__ distanceFunc sphereDistAddr=sphereDistance;
+__managed__ distanceFunction sphereDistAddr=sphereDistance;
 
-__device__ static float cubeDistance(const void *shapeData, float3 point, size_t frame) {
+__device__ static float cubeDistance(const void *shapeData, vectorType point, size_t frame) {
 	register const sphereData_t * const sphere=static_cast<const sphereData_t*>(shapeData);
 	register vectorType diff=point+-1*sphere->center;
 	diff.x=fabs(diff.x);
@@ -63,9 +72,9 @@ __device__ static float cubeDistance(const void *shapeData, float3 point, size_t
 	if(diff.z>diff.x) diff.x=diff.z;
 	return diff.x-sphere->radius;
 }
-__managed__ distanceFunc cubeDistAddr=cubeDistance;
+__managed__ distanceFunction cubeDistAddr=cubeDistance;
 
-__device__ static floatColor_t glowColor(const void *shapeData, float3 point, float distance, float divergence, size_t frame, size_t steps) {
+__device__ static floatColor_t glowColor(const void *shapeData, vectorType point, scalarType distance, scalarType divergence, size_t frame, size_t steps) {
 	register floatColor_t color=static_cast<const simpleColor_t*>(shapeData)->color;
 	const register scalarType stepf=1-1/(steps*.0625f+1),divf=1-distance/divergence;
 	color.r*=divf*stepf;
@@ -123,6 +132,7 @@ __device__ vectorType raydir(scalarType &divergence, int3 pos, size_t frame) {
 __managed__ rayFunc rf=raydir;
 static clock_t last=clock();
 static int postFrame(size_t frame, void *data) {
+	updateTime();
 	const clock_t t=clock();
 	register vectorType delta;
 	delta+=normv(cam.face)*TESTAB(keymask,KEY_FORWARD,KEY_BACKWARD);
@@ -208,7 +218,7 @@ int main() {
 
 	for(int i=0;i<SHAPE_COUNT;i++,sd++) {
 		cudaMemcpyToSymbol(shapes,&glowColorAddr,sizeof(colorFunc),sizeof(shape_t)*i+offsetof(shape_t,colorFunction));
-		cudaMemcpyToSymbol(shapes,i%2?&sphereDistAddr:&cubeDistAddr,sizeof(distanceFunc),sizeof(shape_t)*i+offsetof(shape_t,distanceFunction));
+		cudaMemcpyToSymbol(shapes,i%2?&sphereDistAddr:&cubeDistAddr,sizeof(distanceFunction),sizeof(shape_t)*i+offsetof(shape_t,distanceFunc));
 		cudaMemcpyToSymbol(shapes,&sd,sizeof(void*),sizeof(shape_t)*i+offsetof(shape_t,shapeData));
 	}
 	sphereData_t sample;

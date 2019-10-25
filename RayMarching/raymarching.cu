@@ -7,7 +7,6 @@
 
 #include "raymarching.cuh"
 
-#include <cmath>
 #include <cassert>
 
 __device__ static void marchRay(argb &pixel, int3 pos, size_t frame, const void *data) {

@@ -8,19 +8,27 @@
 #ifndef VECOPS_CUH_
 #define VECOPS_CUH_
 
-#include <cfloat>
 #include <cmath>
+#include <cfloat>
 
-typedef float3 vectorType;
 typedef float scalarType;
-__host__ __device__ constexpr scalarType coss(scalarType a) {
-	return cosf(a);
+
+__host__ __device__ constexpr inline scalarType nans(const char *c) {
+	return nanf(c);
 }
-__host__ __device__ constexpr scalarType sins(scalarType a) {
+#define SCL_EPSILON FLT_EPSILON
+
+__host__ __device__ constexpr inline scalarType sins(scalarType a) {
 	return sinf(a);
 }
+__host__ __device__ constexpr inline scalarType coss(scalarType a) {
+	return cosf(a);
+}
+__host__ __device__ constexpr inline scalarType tans(scalarType a) {
+	return tanf(a);
+}
 
-#define SCL_EPSILON FLT_EPSILON
+typedef float3 vectorType;
 
 __host__ __device__ constexpr vectorType &operator*=(vectorType &a, scalarType b) {
 	a.x*=b;

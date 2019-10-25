@@ -20,15 +20,6 @@ template<typename T> __host__ __device__ constexpr const T &max(const T &a, cons
 }
 
 /**
- * Device function that calculates the shortest distance between this shape and the given point
- * @param shapeData		Data associated with the shape using this distance function
- * @param point			The point to calculate the minimum distance to
- * @param frame			The framecounter
- * @return				The minimum distance between point and this shape.
- */
-typedef scalarType (*distanceFunc)(const void *shapeData, vectorType point, size_t frame);
-
-/**
  * Representation of color with floating point values.
  */
 typedef struct __floatColor {
@@ -82,20 +73,30 @@ typedef struct __floatColor {
 typedef floatColor_t (*colorFunc)(const void *shapeData, vectorType point, scalarType distance, scalarType rayLength, size_t frame, size_t steps);
 
 /**
+ * Device function that calculates the shortest distance between this shape and the given point
+ * @param shapeData		Data associated with the shape using this distance function
+ * @param point			The point to calculate the minimum distance to
+ * @param frame			The framecounter
+ * @return				The minimum distance between point and this shape.
+ */
+
+typedef scalarType (*distanceFunction)(const void *shapeData, vectorType point, size_t frame);
+
+/**
  * Data structure representing a shape
  */
 typedef struct {
 	/**
-	 * The distance function used by this shape
+	 * The distance function used by this shape.
 	 */
-	distanceFunc distanceFunction;
+	distanceFunction distanceFunc;
 	/**
-	 * The color function used by this shape
+	 * The color function used by this shape.
 	 */
 	colorFunc colorFunction;
 	/**
 	 * The data associated with this shape.
-	 * Must be device-accessible memory.
+	 * Must be in device-accessible memory.
 	 */
 	void *shapeData;
 	/**
@@ -105,7 +106,7 @@ typedef struct {
 	 * @return			the distance
 	 */
 	__device__ inline scalarType getDistance(vectorType point, size_t frame) const {
-		return this->distanceFunction(this->shapeData,point,frame);
+		return this->distanceFunc(this->shapeData,point,frame);
 	}
 	/**
 	 * Mnemonic to call the color function with parameters.
