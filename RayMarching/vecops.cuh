@@ -8,27 +8,11 @@
 #ifndef VECOPS_CUH_
 #define VECOPS_CUH_
 
-#include <cmath>
-#include <cfloat>
-
-typedef float scalarType;
-
-__host__ __device__ constexpr inline scalarType nans(const char *c) {
-	return nanf(c);
-}
-#define SCL_EPSILON FLT_EPSILON
-
-__host__ __device__ constexpr inline scalarType sins(scalarType a) {
-	return sinf(a);
-}
-__host__ __device__ constexpr inline scalarType coss(scalarType a) {
-	return cosf(a);
-}
-__host__ __device__ constexpr inline scalarType tans(scalarType a) {
-	return tanf(a);
-}
+#include "dynmath.cuh"
 
 typedef float3 vectorType;
+
+constexpr static vectorType X={1_s,0_s,0_s},Y={0_s,1_s,0_s},Z={0_s,0_s,1_s},V0={0_s,0_s,0_s};
 
 __host__ __device__ constexpr vectorType &operator*=(vectorType &a, scalarType b) {
 	a.x*=b;

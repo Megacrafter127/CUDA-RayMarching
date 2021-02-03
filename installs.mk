@@ -1,8 +1,8 @@
 /usr/local/include/%: %
-	cp $< /usr/local/include/
+	pkexec cp $(PWD)/$< /usr/local/include/
 /usr/local/lib/%: %
-	cp $< /usr/local/lib/
+	pkexec cp $(PWD)/$< /usr/local/lib/
 /usr/local/bin/%: %
-	cp $< /usr/local/bin/
+	pkexec cp $(PWD)/$< /usr/local/bin/
 /usr/local/sbin/%: %
-	cp $< /usr/local/sbin/
+	pkexec cp $(PWD)/$< /usr/local/sbin/

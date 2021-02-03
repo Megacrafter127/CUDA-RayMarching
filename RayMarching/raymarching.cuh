@@ -22,55 +22,20 @@ template<typename T> __host__ __device__ constexpr const T &max(const T &a, cons
 /**
  * Representation of color with floating point values.
  */
-typedef struct __floatColor {
-	constexpr const static float uVal=0xFF;
-	float r,g,b,a;
-	/**
-	 * Blends this color with the other color.
-	 * @param other		The color to blend with this color
-	 */
-	__host__ __device__ inline void operator+=(const struct __floatColor &other) {
-		const register float s=a+other.a;
-		r=r*a+other.r*other.a;
-		g=g*a+other.g*other.a;
-		b=b*a+other.b*other.a;
-		r/=s;
-		g/=s;
-		b/=s;
-		a=1-(1-a)*(1-other.a);
-	}
 
-	__host__ __device__ inline void operator=(argb color) {
-		r=color.r/uVal;
-		g=color.g/uVal;
-		b=color.b/uVal;
-		a=color.a/uVal;
-	}
-
-	/**
-	 * Turns this color representation into 32bit argb format
-	 */
-	__host__ __device__ inline operator argb() const {
-		register argb ret;
-		ret.r=(unsigned char)rintf(uVal*r);
-		ret.g=(unsigned char)rintf(uVal*g);
-		ret.b=(unsigned char)rintf(uVal*b);
-		ret.a=(unsigned char)rintf(uVal*a);
-		return ret;
-	}
-} floatColor_t;
 
 /**
  * Device function that returns the color of this shape.
  * @param shapeData		The data associated with this shape.
- * @param point			The point the ray is currently at, in case this shape has different colors depending on where it's viewed from.
- * @param distance		The distance between this shape and the point, as calculated by the distance function of this shape.
- * @param rayLength		The distance this ray has already traveled.
  * @param frame			The framecounter
- * @param steps			The number of steps this ray has already marched
+ * @param point			The point the ray is currently at, in case this shape has different colors depending on where it's viewed from.
+ * @param rayLength		The distance this ray has already traveled.
+ * @param steps			The number of steps this ray has marched.
+ * @param minStep		The smallest step the ray has taken.
+ * @param minStepDist	The distance the ray had already traveled when the smallest step was taken.
  * @return				The color of this shape
  */
-typedef floatColor_t (*colorFunc)(const void *shapeData, vectorType point, scalarType distance, scalarType rayLength, size_t frame, size_t steps);
+typedef color_t (*colorFunc)(const void *shapeData, size_t frame, int collides, vectorType point, scalarType rayLength, scalarType distance, size_t steps, scalarType minStep, scalarType minStepEstimate, scalarType minStepDist);
 
 /**
  * Device function that calculates the shortest distance between this shape and the given point
@@ -79,8 +44,17 @@ typedef floatColor_t (*colorFunc)(const void *shapeData, vectorType point, scala
  * @param frame			The framecounter
  * @return				The minimum distance between point and this shape.
  */
-
 typedef scalarType (*distanceFunction)(const void *shapeData, vectorType point, size_t frame);
+
+/**
+ * Device function that calculates the gradient of a distanceFunction.
+ * Mainly used in reflection.
+ * @param shapeData		Data associated with the shape using the distanceFunction this function computes the gradient of
+ * @param point			The point to calculate the gradient at
+ * @param frame			The framecounter
+ * @return				The gradient of the distanceFunction at the given point
+ */
+typedef vectorType (*gradientFunction)(const void *shapeData, vectorType point, size_t frame);
 
 /**
  * Data structure representing a shape
@@ -91,6 +65,10 @@ typedef struct {
 	 */
 	distanceFunction distanceFunc;
 	/**
+	 * The gradient function of distanceFunc
+	 */
+	gradientFunction gradientFunc;
+	/**
 	 * The color function used by this shape.
 	 */
 	colorFunc colorFunction;
@@ -99,6 +77,8 @@ typedef struct {
 	 * Must be in device-accessible memory.
 	 */
 	void *shapeData;
+
+	mutable int collided;
 	/**
 	 * Mnemonic to call the distance function with parameters.
 	 * @param point		the point
@@ -107,6 +87,9 @@ typedef struct {
 	 */
 	__device__ inline scalarType getDistance(vectorType point, size_t frame) const {
 		return this->distanceFunc(this->shapeData,point,frame);
+	}
+	__device__ inline vectorType getGradient(vectorType point, size_t frame) const {
+		return this->gradientFunc(this->shapeData,point,frame);
 	}
 	/**
 	 * Mnemonic to call the color function with parameters.
@@ -117,8 +100,8 @@ typedef struct {
 	 * @param steps			the number of steps this ray has already marched
 	 * @return				the color
 	 */
-	__device__ inline floatColor_t getColor(vectorType point, scalarType distance, scalarType rayLength,size_t frame,size_t steps) const {
-		return this->colorFunction(this->shapeData,point,distance,rayLength,frame,steps);
+	__device__ inline color_t getColor(size_t frame, int collides, vectorType point, scalarType rayLength, scalarType dfs, size_t steps, scalarType minStep, scalarType minStepEstimate, scalarType minStepDist) const {
+		return this->colorFunction(this->shapeData,frame,collides,point,rayLength,dfs,steps,minStep,minStepEstimate,minStepDist);
 	}
 } shape_t;
 
@@ -148,6 +131,10 @@ typedef struct {
 	 */
 	camera_t camera;
 	/**
+	 * background color
+	 */
+	color_t background;
+	/**
 	 * shapes
 	 * Must be device-accessible memory.
 	 */
@@ -160,6 +147,10 @@ typedef struct {
 	 * maximum permissible error
 	 */
 	scalarType maxErr;
+	/**
+	 *
+	 */
+	scalarType collisionMultiplier;
 } world_t;
 
 /**
@@ -172,6 +163,6 @@ typedef struct {
  * @param eventFunction
  * @return
  */
-cudaError_t autoRenderShapes(SDL_Surface *surface, world_t *world, float deltaT=.0f, postFrameFunc postframe=NULL, preFrameFunc preframe=NULL, eventFunc eventFunction=NULL, unsigned x_threads=0, unsigned y_threads=0);
+cudaError_t autoRenderShapes(SDL_Window *window, world_t *world, postFrameFunc postframe=NULL, preFrameFunc preframe=NULL, eventFunc eventFunction=NULL, unsigned x_threads=0, unsigned y_threads=0);
 
 #endif /* RAYMARCHING_CUH_ */
