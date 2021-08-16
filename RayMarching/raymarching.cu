@@ -10,16 +10,24 @@
 #include <cassert>
 #include <unordered_map>
 
-__constant__ static color_t green={0,1,0,1};
+//__constant__ static float4 green={0,1,0,1};
 
-__constant__ static int3 overlayoffset={0,0,0};
+//__constant__ static int3 overlayoffset={0,0,0};
 
 __constant__ static float framedata[2];
 
-__constant__ static unsigned precisions[2]={0,2};
+//__constant__ static unsigned precisions[2]={0,2};
 
 __device__ static constexpr scalarType collisionDistance(scalarType totalDist,scalarType multiplier) {
 	return multiplier*totalDist*SCL_EPSILON;
+}
+
+__host__ __device__ static constexpr float4 &operator+=(float4 &a, float4 b) {
+	a.x+=b.x;
+	a.y+=b.y;
+	a.z+=b.z;
+	a.w+=b.w;
+	return a;
 }
 
 typedef struct {
@@ -33,7 +41,44 @@ __host__ __device__ inline size_t idx(uint3 i, dim3 b, size_t j) {
 
 __shared__ extern minStore_t mins[];
 
-__device__ static color_t marchRay(int3 pos, size_t frame, const void *data) {
+template<typename T> __device__ inline void simpleSurf2Dwrite(register T data, register cudaSurfaceObject_t surface, register int x, register int y, register cudaSurfaceBoundaryMode mode = cudaBoundaryModeZero) {
+	return surf2Dwrite(data, surface, x*sizeof(T), y, mode);
+}
+
+__device__ static constexpr uint3 operator+(uint3 a, uint3 b) {
+	a.x += b.x;
+	a.y += b.y;
+	a.z += b.z;
+	return a;
+}
+
+__device__ static constexpr uint3 operator*(uint3 a, dim3 b) {
+	a.x *= b.x;
+	a.y *= b.y;
+	a.z *= b.z;
+	return a;
+}
+
+__device__ static constexpr uint3 operator*(dim3 a, uint3 b) {
+	return b*a;
+}
+
+__device__ static constexpr int3 operator-(uint3 a, dim3 b) {
+	int3 ret{};
+	ret.x=a.x-b.x;
+	ret.y=a.y-b.y;
+	ret.z=a.z-b.z;
+	return ret;
+}
+__device__ static constexpr dim3 operator/(dim3 a, unsigned scalar) {
+	a.x/=scalar;
+	a.y/=scalar;
+	a.z/=scalar;
+	return a;
+}
+
+__global__ static void marchRay(cudaSurfaceObject_t surf, dim3 bounds, size_t frame, const void *data) {
+	const register uint3 pos = threadIdx+blockDim*blockIdx;
 	__shared__ world_t world;
 	if((threadIdx.x|threadIdx.y|threadIdx.z)==0) {
 		memcpy(&world,data,sizeof(world_t));
@@ -41,7 +86,7 @@ __device__ static color_t marchRay(int3 pos, size_t frame, const void *data) {
 	__syncthreads();
 	register scalarType totalDist=0._s,divergence;
 	register vectorType start=world.camera.pos;
-	register vectorType ray=world.camera.rays(divergence,pos,frame);
+	register vectorType ray=world.camera.rays(divergence,pos-bounds/2,frame);
 	ray/=norm(ray);
 	register size_t step=0;
 
@@ -71,27 +116,74 @@ __device__ static color_t marchRay(int3 pos, size_t frame, const void *data) {
 			break;
 		}
 	}
-	register color_t color=world.background;
+	register float4 color=world.background;
 	for(size_t i=0;i<world.shapeCount;i++) {
 		const register scalarType distance=world.shapes[i].getDistance(start,frame);
-		register color_t c=world.shapes[i].getColor(frame,
+		register float4 c=world.shapes[i].getColor(frame,
 				distance<collisionDistance(totalDist,world.collisionMultiplier),
 				start,totalDist,distance,step,
 				mins[idx(threadIdx,blockDim,i)].len,
 				world.shapes[i].getDistance(mins[idx(threadIdx,blockDim,i)].pos,frame),
 				mins[idx(threadIdx,blockDim,i)].dist);
-		for(int i=0;i<3;i++) c.raw[i]*=c.a;
+		c.x*=c.w;
+		c.y*=c.w;
+		c.z*=c.w;
 		color+=c;
 	}
-	if(color.a>0 || color.a<0) {
-		for(int i=0;i<3;i++) color.raw[i]/=color.a;
-		color.a=1;
+	if(color.w>0 || color.w<0) {
+		color.x/=color.w;
+		color.y/=color.w;
+		color.z/=color.w;
+		color.w=1;
 	} else {
-		for(int i=0;i<3;i++) color.raw[i]=0;
+		color.x=0;
+		color.y=0;
+		color.z=0;
 	}
-	return overlayNumbers(color,pos,green,overlayoffset,2,precisions,framedata,2);
+
+	simpleSurf2Dwrite(color,surf,pos.x,pos.y);
+	//return overlayNumbers(color,pos,green,overlayoffset,2,precisions,framedata,2);
 }
-__managed__ static cudaFunc rayMarch=marchRay;
+
+#define CHUNKIFY(len,chunk) (len+(chunk-len%chunk)%chunk)
+#define CHUNKCOUNT(len,chunk) (CHUNKIFY(len,chunk)/chunk)
+
+constexpr dim3 operator+(dim3 a, dim3 b) {
+	a.x += b.x;
+	a.y += b.y;
+	a.z += b.z;
+	return a;
+}
+
+constexpr dim3 operator-(dim3 a, dim3 b) {
+	a.x -= b.x;
+	a.y -= b.y;
+	a.z -= b.z;
+	return a;
+}
+
+constexpr dim3 operator%(dim3 a, dim3 b) {
+	a.x %= b.x;
+	a.y %= b.y;
+	a.z %= b.z;
+	return a;
+}
+
+constexpr dim3 operator/(dim3 a, dim3 b) {
+	a.x /= b.x;
+	a.y /= b.y;
+	a.z /= b.z;
+	return a;
+}
+
+static std::unordered_map<const void*,dim3> threads;
+
+static std::unordered_map<const void*,size_t> dyn_shared;
+
+static void launchRayMarch(cudaSurfaceObject_t surface, dim3 bounds, size_t frame, const void *userData, cudaStream_t stream) {
+	marchRay<<<CHUNKCOUNT(bounds,threads[userData]),threads[userData],dyn_shared[userData],stream>>>(surface,bounds,frame,userData);
+}
+
 
 static std::unordered_map<const void*,preFrameFunc> pf;
 
@@ -99,7 +191,7 @@ static clock_t start,current=0,last;
 constexpr static float cps=CLOCKS_PER_SEC;
 static float frames=0,fb[2];
 
-static int preframeF(size_t frame, const void *data, dim3 &threads, unsigned &z_blocks, size_t &dyn_shared, cudaStream_t stream) {
+static int preframeF(size_t frame, const void *data, cudaStream_t stream) {
 	clock_t c=clock();
 	fb[1]=cps/(c-last);
 	last=c;
@@ -112,14 +204,15 @@ static int preframeF(size_t frame, const void *data, dim3 &threads, unsigned &z_
 	}
 	cudaMemcpyToSymbolAsync(framedata,&fb,sizeof(float)*2,0,cudaMemcpyHostToDevice,stream);
 	frames+=1;
-	dyn_shared=sizeof(minStore_t)*threads.x*threads.y*threads.z*static_cast<const world_t*>(data)->shapeCount;
+	dyn_shared[data]=sizeof(minStore_t)*threads[data].x*threads[data].y*threads[data].z*static_cast<const world_t*>(data)->shapeCount;
 	preFrameFunc f=pf[data];
-	if(f) return f(frame,data,threads,z_blocks,dyn_shared,stream);
+	if(f) return f(frame,data,stream);
 	return 0;
 }
 
 cudaError_t autoRenderShapes(SDL_Window *win, world_t *world,  postFrameFunc postframe, preFrameFunc preframe, eventFunc eventFunction, unsigned x_threads, unsigned y_threads) {
 	pf[world]=preframe;
-	cudaError_t err=autoDrawCUDA(win,rayMarch,1,postframe,preframeF,eventFunction,world,x_threads,y_threads);
+	threads[world]=dim3(x_threads,y_threads,1);
+	cudaError_t err=autoDrawCUDA(win,launchRayMarch,postframe,preframeF,eventFunction,world);
 	return err;
 }

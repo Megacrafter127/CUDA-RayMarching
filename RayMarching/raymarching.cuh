@@ -10,7 +10,7 @@
 
 #include "vecops.cuh"
 
-#include <simpledrawCUDA.cuh>
+#include <simpledraw.h>
 
 template<typename T> __host__ __device__ constexpr T &max(T &a, T &b) {
 	return a>b?a:b;
@@ -35,7 +35,7 @@ template<typename T> __host__ __device__ constexpr const T &max(const T &a, cons
  * @param minStepDist	The distance the ray had already traveled when the smallest step was taken.
  * @return				The color of this shape
  */
-typedef color_t (*colorFunc)(const void *shapeData, size_t frame, int collides, vectorType point, scalarType rayLength, scalarType distance, size_t steps, scalarType minStep, scalarType minStepEstimate, scalarType minStepDist);
+typedef float4 (*colorFunc)(const void *shapeData, size_t frame, int collides, vectorType point, scalarType rayLength, scalarType distance, size_t steps, scalarType minStep, scalarType minStepEstimate, scalarType minStepDist);
 
 /**
  * Device function that calculates the shortest distance between this shape and the given point
@@ -100,7 +100,7 @@ typedef struct {
 	 * @param steps			the number of steps this ray has already marched
 	 * @return				the color
 	 */
-	__device__ inline color_t getColor(size_t frame, int collides, vectorType point, scalarType rayLength, scalarType dfs, size_t steps, scalarType minStep, scalarType minStepEstimate, scalarType minStepDist) const {
+	__device__ inline float4 getColor(size_t frame, int collides, vectorType point, scalarType rayLength, scalarType dfs, size_t steps, scalarType minStep, scalarType minStepEstimate, scalarType minStepDist) const {
 		return this->colorFunction(this->shapeData,frame,collides,point,rayLength,dfs,steps,minStep,minStepEstimate,minStepDist);
 	}
 } shape_t;
@@ -133,7 +133,7 @@ typedef struct {
 	/**
 	 * background color
 	 */
-	color_t background;
+	float4 background;
 	/**
 	 * shapes
 	 * Must be device-accessible memory.
